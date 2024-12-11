@@ -1,0 +1,103 @@
+#Creamos las carpetas
+mkdir C:\data\configdb
+mkdir C:\data\shard1
+mkdir C:\data\shard2
+mkdir C:\data\shard3
+
+#Congiguramos los serves
+mongod --configsvr --replSet configReplSet --dbpath C:\data\configdb --port 27019 --bind_ip localhost
+
+#Configuramos la replica set desde mongosh
+conéctate a mongosh
+mongosh --port 27019
+
+Configura el replica 
+rs.initiate({
+  _id: "configReplSet",
+  configsvr: true,
+  members: [
+    { _id: 0, host: "localhost:27019" }
+  ]
+});
+
+#Confirmar el estado del Replica Set
+rs.status();
+
+mongod --shardsvr --replSet shard1 --dbpath C:\data\shard1 --port 27018 --bind_ip localhost
+mongod --shardsvr --replSet shard2 --dbpath C:\data\shard2 --port 27028 --bind_ip localhost
+mongod --shardsvr --replSet shard3 --dbpath C:\data\shard3 --port 27038 --bind_ip localhost
+
+#Configurar el Replica Set del servidor shard
+mongosh --port 27018
+
+Ejecuta el comando para inicializar el Replica Set:
+rs.initiate({
+  _id: "shard1",
+  members: [
+    { _id: 0, host: "localhost:27018" }
+  ]
+});
+
+rs.status();
+
+#Configurar el servidor mongos
+mongos --configdb configReplSet/localhost:27019 --port 27017
+
+Conéctate al servidor mongos
+mongosh --port 27017
+
+#Agregar el shard al clúster
+sh.addShard("shard1/localhost:27018");
+sh.addShard("shard2/localhost:27028");
+sh.addShard("shard3/localhost:27038");
+
+#Habilitar sharding para una base de datos
+sh.enableSharding("miBaseDeDatos");
+
+Define una clave shard para una colección:
+db.miColeccion.createIndex({ campoShard: 1 });
+sh.shardCollection("miBaseDeDatos.miColeccion", { campoShard: 1 });
+
+rs.initiate({
+  _id: "shard3",
+  members: [
+    { _id: 0, host: "localhost:27038" }
+  ]
+});
+#Configurar el Servidor Mongos
+mongos --configdb configReplSet/localhost:27019 --port 27017
+
+#Conectarse al servidor Mongos:
+mongosh --port 27017
+
+Abre una shell de MongoDB conectada al servidor Mongos.
+Agregar los shards al clúster:
+sh.addShard("shard1/localhost:27018");
+sh.addShard("shard2/localhost:27028");
+sh.addShard("shard3/localhost:27038");
+ 
+5. Habilitar Sharding en la Base de Datos
+Una vez que los shards están configurados, se debe habilitar el sharding para una base de datos.
+sh.enableSharding("TorneoFutbol");
+ 
+6. Configurar la Clave de Shard para la Colección 
+Crear un índice para la clave de shard:
+use TorneoFutbol;
+db.jugadores.createIndex({ equipo: 1 });
+ 
+Definir el sharding para la colección:
+sh.shardCollection("TorneoFutbol.jugadores", { equipo: 1 });
+ 
+Definir el punto de división entre los rangos (A-L y M-Z):
+sh.splitAt("TorneoFutbol.jugadores", { equipo: "M" });
+ 
+Verificación
+sh.status();
+Pruebas de Inserción:
+db.jugadores.insertMany([
+  { _id: 1, nombre: "Juan Pérez", equipo: "Águilas", posicion: "Delantero" },
+  { _id: 2, nombre: "Carlos López", equipo: "Leones", posicion: "Defensa" },
+  { _id: 3, nombre: "Luis Gómez", equipo: "Tigres", posicion: "Portero" },
+  { _id: 4, nombre: "Andrés Ríos", equipo: "Águilas", posicion: "Mediocampista" }
+]);
+
